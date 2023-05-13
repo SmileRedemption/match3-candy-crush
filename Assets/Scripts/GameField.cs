@@ -1,261 +1,162 @@
 using System;
 using System.Collections;
-using System.Collections.Generic;
-using DG.Tweening;
+using System.Linq;
+using Animations;
 using Extensions;
 using Model.Candy;
-using UnityEditor.Timeline.Actions;
 using UnityEngine;
-using UnityEngine.UI;
 using Views;
 
-namespace DefaultNamespace
+public class GameField : MonoBehaviour
 {
-    public class GameField : MonoBehaviour
+    [SerializeField] private Row[] _rows;
+    [SerializeField] private CandyData[] _candiesData;
+        
+    private CellView[,] _board;
+    
+    private CellView _selectedCell;
+    private CellView _nextSelectedCell;
+
+    private readonly CandyAnimation _candyAnimation = new CandyAnimation();
+    private MatchChecker _matchChecker;
+
+    private int RowLength => _board.GetLength(0);
+    private int ColumnLength => _board.GetLength(1);
+
+    public void Initialize()
     {
-        [SerializeField] private Row[] _rows;
-        [SerializeField] private CandyData[] _candiesData;
-        
-        private CellView[,] _board;
-        private CellView _selectedCell;
-        private CellView _nextSelectedCell;
+        InitializeBoard();
+        InitializeMatchChecker();
+        SetCandyInBoard();
+    }
 
-        private int RowLength => _board.GetLength(0);
-        private int ColumnLength => _board.GetLength(1);
-        
-        public void Initialize()
+    private void OnDestroy()
+    {
+        _matchChecker.DestroyedHorizontal -= DestroyHorizontalMatches;
+        _matchChecker.DestroyedVertical -= DestroyVerticalMatches;
+    }
+
+    private void InitializeBoard()
+    {
+        _board = new CellView[_rows.Length, _rows[0].CellViews.Count];
+
+        for (int i = 0; i < RowLength; i++)
         {
-            InitializeBoard();
-            SetCandyInBoard();
-        }
-
-        private void InitializeBoard()
-        {
-            _board = new CellView[_rows.Length, _rows[0].CellViews.Length];
-
-            for (int i = 0; i < RowLength; i++)
+            for (int j = 0; j < ColumnLength; j++)
             {
-                for (int j = 0; j < ColumnLength; j++)
-                {
-                    _board[i, j] = _rows[i].CellViews[j];
-                }
+                _board[i, j] = _rows[i].CellViews.ElementAt(j);
             }
         }
+    }
 
-        private void SetCandyInBoard()
+    private void SetCandyInBoard()
+    {
+        for (int i = 0; i < RowLength; i++)
         {
-            for (int i = 0; i < RowLength; i++)
+            for (int j = 0; j < ColumnLength; j++)
             {
-                for (int j = 0; j < ColumnLength; j++)
-                {
-                    var candySprite = _candiesData.PickRandom().Sprite;
-                    _board[i, j].InitializeCell(candySprite, i, j);
-                }
-            }
-
-            var boardWithoutMatches = false;
-
-            while (boardWithoutMatches == false)
-                  boardWithoutMatches = CheckHorizontal(true) != true && CheckVertical(true) != true;
-
-            foreach (var row in _rows)
-                row.InitializeCells(OnSelectCell);
-        }
-
-        private bool CheckHorizontal(bool isInitialize = false)
-        {
-            bool matchesFound = false;
-
-            for (int row = 0; row < RowLength; row++)
-            {
-                int col = 0;
-
-                while (col < ColumnLength)
-                {
-                    var currentPiece = _board[row, col].Sprite;
-
-                    if (currentPiece != null)
-                    {
-                        int matchLength = 1;
-                        int nextCol = col + 1;
-
-                        while (nextCol < ColumnLength && _board[row, nextCol].Sprite == currentPiece)
-                        {
-                            matchLength++;
-                            nextCol++;
-                        }
-
-                        if (matchLength >= 3)
-                        {
-                            matchesFound = true;
-                            DestroyHorizontalMatches(row, col, matchLength, isInitialize);
-                        }
-
-                        col = nextCol;
-                    }
-                    else
-                    {
-                        col++;
-                    }
-                }
-            }
-            
-            return matchesFound;
-        }
-
-        private bool CheckVertical(bool isInitialize = false)
-        {
-            bool matchesFound = false;
-
-            for (int col = 0; col < ColumnLength; col++)
-            {
-                int row = 0;
-
-                while (row < RowLength)
-                {
-                    var currentPiece = _board[row, col].Sprite;
-
-                    if (currentPiece != null)
-                    {
-                        int matchLength = 1;
-                        int nextRow = row + 1;
-
-                        while (nextRow < RowLength && _board[nextRow, col].Sprite == currentPiece)
-                        {
-                            matchLength++;
-                            nextRow++;
-                        }
-
-                        if (matchLength >= 3)
-                        {
-                            matchesFound = true;
-                            DestroyVerticalMatches(row, col, matchLength, isInitialize);
-                        }
-
-                        row = nextRow;
-                    }
-                    else
-                    {
-                        row++;
-                    }
-                }
-            }
-
-            return matchesFound;
-        }
-
-        private void DestroyHorizontalMatches(int row, int col, int matchLength, bool isInitialize)
-        {
-            
-            for (int j = col; j < col + matchLength; j++)
-            {
-                var cellView = _board[row, j];
-                
-                if (isInitialize)
-                {
-                    cellView.ChangeSprite(_candiesData.PickRandom().Sprite);
-                    return;
-                }
-                
-                AnimateDestroy(cellView.transform,
-                    () => cellView.ChangeSprite(_candiesData.PickRandom().Sprite));
-            }
-        }
-        
-        private void DestroyVerticalMatches(int row, int col, int matchLength, bool isInitialize)
-        {
-            for (int i = row; i < row + matchLength; i++)
-            {
-                var cellView = _board[i, col];
-                
-                if (isInitialize)
-                {
-                    cellView.ChangeSprite(_candiesData.PickRandom().Sprite);
-                    return;
-                }
-                
-                AnimateDestroy(cellView.transform,
-                    () => cellView.ChangeSprite(_candiesData.PickRandom().Sprite));
+                var candySprite = _candiesData.PickRandom().Sprite;
+                _board[i, j].InitializeCell(candySprite, i, j);
             }
         }
 
-        private void OnSelectCell(int x, int y)
+        var boardWithoutMatches = false;
+
+        while (boardWithoutMatches == false)
+            boardWithoutMatches = _matchChecker.CheckHorizontal(true) != true && _matchChecker.CheckVertical(true) != true;
+
+        foreach (var row in _rows)
+            row.InitializeCells(OnSelectCell);
+    }
+    
+    private void InitializeMatchChecker()
+    {
+        _matchChecker = new MatchChecker(_board, RowLength, ColumnLength);
+        _matchChecker.DestroyedHorizontal += DestroyHorizontalMatches;
+        _matchChecker.DestroyedVertical += DestroyVerticalMatches;
+    }
+
+    private void OnSelectCell(int x, int y)
+    {
+        if (_selectedCell == null )
         {
-            if (_selectedCell == null )
-            {
-                _selectedCell = _board[x, y];
-                _selectedCell.Select();
-                return;
-            }
-
-            if (_selectedCell.X == x && _selectedCell.Y == y)
-            {
-                _selectedCell.UnSelect();
-                _selectedCell = null;
-                return;
-            }
-
-            if (_nextSelectedCell == null)
-            {
-                if (Math.Abs(x - _selectedCell.X) == 1 && Math.Abs(y - _selectedCell.Y) == 0
-                    || Math.Abs(y - _selectedCell.Y) == 1 && Math.Abs(x - _selectedCell.X) == 0){
-                    _nextSelectedCell = _board[x, y];
-                    _selectedCell.UnSelect();
-                    Swapping();
-                }
-            }
+            _selectedCell = _board[x, y];
+            _selectedCell.Select();
+            return;
         }
 
-        private void Swapping()
+        if (_selectedCell.X == x && _selectedCell.Y == y)
         {
-            var selectedCellSprite = _selectedCell.Sprite;
-            var nextSelectedCellSprite = _nextSelectedCell.Sprite;
-
-            AnimateSpriteChange(_selectedCell.Candy, nextSelectedCellSprite, 0.2f);
-            AnimateSpriteChange(_nextSelectedCell.Candy, selectedCellSprite, 0.2f, () => StartCoroutine(OnSwappingEnd()));
-        }
-
-        private IEnumerator OnSwappingEnd()
-        {
-            bool boardWithoutMatches = false;
-
-            while (boardWithoutMatches == false)
-            {
-                boardWithoutMatches = CheckHorizontal() != true && CheckVertical() != true;
-                yield return new WaitForSeconds(0.9f);
-            }
-            
+            _selectedCell.UnSelect();
             _selectedCell = null;
-            _nextSelectedCell = null;
+            return;
         }
 
-        private void AnimateDestroy(Transform element, Action onCallback)
+        if (_nextSelectedCell == null)
         {
-            Sequence sequence = DOTween.Sequence();
-
-            var normalScale = element.transform.localScale;
-            sequence.Append(element.DOScale(Vector3.zero, 0.5f));
-            sequence.AppendCallback(onCallback.Invoke);
-            sequence.Append(element.DOScale(normalScale, 0.5f));
-
-            sequence.Play()
-                .OnComplete(() => sequence.Kill());
+            if (Math.Abs(x - _selectedCell.X) == 1 && Math.Abs(y - _selectedCell.Y) == 0
+                || Math.Abs(y - _selectedCell.Y) == 1 && Math.Abs(x - _selectedCell.X) == 0){
+                _nextSelectedCell = _board[x, y];
+                _selectedCell.UnSelect();
+                Swapping();
+            }
         }
+    }
 
-        private void AnimateSpriteChange(Image image, Sprite newSprite, float animationDuration, Action onAction = null)
+    private void Swapping()
+    {
+        var selectedCellSprite = _selectedCell.Sprite;
+        var nextSelectedCellSprite = _nextSelectedCell.Sprite;
+
+        _candyAnimation.AnimateSpriteChange(_selectedCell.Candy, nextSelectedCellSprite, 0.2f);
+        _candyAnimation.AnimateSpriteChange(_nextSelectedCell.Candy, selectedCellSprite, 0.2f, () => StartCoroutine(OnSwappingEnd()));
+    }
+
+    private IEnumerator OnSwappingEnd()
+    {
+        bool boardWithoutMatches = false;
+
+        while (boardWithoutMatches == false)
         {
-            Sequence sequence = DOTween.Sequence();
+            boardWithoutMatches = _matchChecker.CheckHorizontal() != true && _matchChecker.CheckVertical() != true;
+            yield return new WaitForSeconds(0.9f);
+        }
+            
+        _selectedCell = null;
+        _nextSelectedCell = null;
+    }
+    
+    private void DestroyHorizontalMatches(int row, int col, int matchLength, bool isInitialize)
+    {
+        for (int j = col; j < col + matchLength; j++)
+        {
+            var cellView = _board[row, j];
 
-            sequence.Append(image.DOFade(0f, animationDuration / 2f));
+            if (isInitialize)
+            {
+                cellView.ChangeSprite(_candiesData.PickRandom().Sprite);
+                return;
+            }
 
-            sequence.AppendCallback(() => image.sprite = newSprite);
+            _candyAnimation.AnimateDestroy(cellView.transform,
+                () => cellView.ChangeSprite(_candiesData.PickRandom().Sprite));
+        }
+    }
 
-            sequence.Append(image.DOFade(1f, animationDuration / 2f));
+    private void DestroyVerticalMatches(int row, int col, int matchLength, bool isInitialize)
+    {
+        for (int i = row; i < row + matchLength; i++)
+        {
+            var cellView = _board[i, col];
 
-            if (onAction != null)
-                sequence.AppendCallback(onAction.Invoke);
+            if (isInitialize)
+            {
+                cellView.ChangeSprite(_candiesData.PickRandom().Sprite);
+                return;
+            }
 
-            sequence.Play().OnComplete(() => sequence.Kill());
+            _candyAnimation.AnimateDestroy(cellView.transform,
+                () => cellView.ChangeSprite(_candiesData.PickRandom().Sprite));
         }
     }
 }

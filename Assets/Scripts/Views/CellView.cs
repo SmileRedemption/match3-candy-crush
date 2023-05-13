@@ -9,23 +9,34 @@ namespace Views
     {
         [SerializeField] private Image _candy;
 
+        private Button _button;
+        
         private Vector3 _normalScale;
         private Vector3 _selectScale;
         
-        public Button Button;
-
         public Sprite Sprite => _candy.sprite;
-
         public Image Candy => _candy;
-
+        
         public int X { get; private set; }
         public int Y { get; private set; }
 
+        public event Action<int, int> OnButtonClicked;
+
         private void Awake()
         {
-            Button = GetComponent<Button>();
+            _button = GetComponent<Button>();
             _normalScale = transform.localScale;
             _selectScale += _normalScale * 1.5f;
+        }
+
+        private void OnEnable()
+        {
+            _button.onClick.AddListener(() => OnButtonClicked?.Invoke(X, Y));
+        }
+
+        private void OnDisable()
+        {
+            _button.onClick.RemoveAllListeners();
         }
 
         public void InitializeCell(Sprite candy, int x, int y)
